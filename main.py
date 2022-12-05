@@ -21,6 +21,9 @@ UPDATES = 30
 # Higher means fewer runners
 RUNNER_CHANCE = 250
 
+# If reversible, runners will start randomly at the end or beginning
+REVERSIBLE = True
+
 
 def connect_to_wifi():
     ip = None
@@ -126,13 +129,14 @@ class PlasmaLedManager:
 
 
 class LedRunner:
-    def __init__(self, led_manager):
+    def __init__(self, led_manager, reverse=False):
         self.led_manager = led_manager
-        self.led_index = 0
         self.color = self.get_random_color()
         self.wait_time = 0
         self.wait_time_max = 500
         self.done = False
+        self.forward = not reverse
+        self.led_index = 0 if self.forward else NUM_LEDS - 1
 
     def get_random_color(self):
         color = choice(list(self.led_manager.HSV_COLORS.values()))
@@ -140,10 +144,14 @@ class LedRunner:
 
     def step(self):
         self.led_manager.set_color(self.led_index, self.color.copy())
-        self.led_index += 1
-        if self.led_index >= NUM_LEDS:
-            self.done = True
-
+        if self.forward:
+            self.led_index += 1
+            if self.led_index >= NUM_LEDS:
+                self.done = True
+        else:
+            self.led_index -= 1
+            if self.led_index < 0:
+                self.done = True
 
 def run_ledrunners():
     plm = PlasmaLedManager(NUM_LEDS)
@@ -162,7 +170,8 @@ def run_ledrunners():
         # Small chance to add a new runner
         chance = randint(0, RUNNER_CHANCE)
         if go or chance == 0:
-            ledrunners.append(LedRunner(plm))
+            reverse = REVERSIBLE and randint(0, 1) == 0
+            ledrunners.append(LedRunner(plm, reverse))
             go = False
 
         # Wait for the next update
