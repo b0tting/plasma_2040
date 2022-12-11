@@ -107,6 +107,9 @@ class PlasmaLedManager:
 
     def set_color(self, led_number, hsv_tuple):
         try:
+            if self.leds[led_number][2] > 0.0:
+                hsv_tuple[1] = (hsv_tuple[1] - self.leds[led_number][1])
+                hsv_tuple[2] = min((hsv_tuple[2] + self.leds[led_number][2]), self.DEFAULT_BRIGHTNESS)
             self.leds[led_number] = hsv_tuple
         except IndexError:
             # Let's be nice and not crash
@@ -155,7 +158,7 @@ class LedRunner:
 
 def run_ledrunners():
     plm = PlasmaLedManager(NUM_LEDS)
-    ledrunners = [LedRunner(plm)]
+    ledrunners = [LedRunner(plm), LedRunner(plm, reverse=True)]
     global go
 
     while True:
