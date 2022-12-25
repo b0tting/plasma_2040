@@ -12,5 +12,6 @@ Components are the Plasma 2040 W and the Pimoroni "RGB LED Strip with Diffuser",
 
 ### Setup
 To set up: 
-- Copy the credentials.py.example to credentials.py, set your SSID/credential and upload it to the 2040
+- Copy the settings.py.example to settings.py, set your SSID/credential and upload it to the 2040
+- Change settings such as the hours in which to want to run the leds, the number of leds, the brightness, etc.
 - Copy the main.py to the 2040

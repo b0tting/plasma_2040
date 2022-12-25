@@ -1,0 +1,30 @@
+WIFI_SSID = '<SSID of your wifi network>'
+WIFI_PASSWORD = '<Credential for your wifi network>'
+
+# Set how many LEDs you have
+NUM_LEDS = 96
+
+# The speed that the LEDs will start cycling at
+DEFAULT_SPEED = 10
+
+# How many times the LEDs will be updated per second
+UPDATES = 30
+
+# Chances of a new runner being added each update
+# Higher means fewer runners
+RUNNER_CHANCE = 250
+
+# If reversible, runners will start randomly at the end or beginning
+REVERSIBLE = True
+
+# If set, shutdown at this hour.
+STOP_HOUR_UTC = 1
+START_HOUR_UTC = 10
+
+# Deep sleep uses less power, but the system will not be available for USB request, meaning
+# a Windows desktop will not be able to connect to it and complain about a broken USB device.
+DEEP_SLEEP_MODE_ENABLED = True
+
+# NTP settings
+NTP_HOST = "pool.ntp.org"
+NTP_DELTA = 2208988800

@@ -4,25 +4,18 @@ from random import random, randint, choice
 import plasma
 import network
 from plasma import plasma2040
+import machine
 import time
+import struct
 import _thread
-from credentials import WIFI_SSID, WIFI_PASSWORD
+try:
+    from settings import *
+except ImportError:
+    print("Please create a settings.py file with your wifi credentials")
+    raise
 
-# Set how many LEDs you have
-NUM_LEDS = 96
 
-# The speed that the LEDs will start cycling at
-DEFAULT_SPEED = 10
-
-# How many times the LEDs will be updated per second
-UPDATES = 30
-
-# Chances of a new runner being added each update
-# Higher means fewer runners
-RUNNER_CHANCE = 250
-
-# If reversible, runners will start randomly at the end or beginning
-REVERSIBLE = True
+ntp_success = False
 
 
 def connect_to_wifi():
@@ -47,8 +40,7 @@ def connect_to_wifi():
     return ip
 
 
-def http_server():
-    ip = connect_to_wifi()
+def http_server(ip):
     address = (ip, 80)
     connection = socket.socket()
     connection.bind(address)
@@ -130,6 +122,11 @@ class PlasmaLedManager:
             led[1] = self.revert_number_to_mean(self.mean[1], led[1], self.SATURATION_DETERIORATION)
             led[2] = self.revert_number_to_mean(self.mean[2], led[2], self.BRIGHTNESS_DETERIORATION)
 
+    def black_out(self):
+        for led in self.leds:
+            led[2] = 0.0
+        self.loop()
+
 
 class LedRunner:
     def __init__(self, led_manager, reverse=False):
@@ -156,31 +153,95 @@ class LedRunner:
             if self.led_index < 0:
                 self.done = True
 
+
+class OpeningHours:
+    SLEEP_TIME = 1 * 60 # minutes * seconds
+    def __init__(self, open_from, open_until):
+        self.open_from = open_from
+        self.open_until = open_until
+        self.rtc = None
+        self.am_sleeping = False
+
+    def set_time(self):
+        try:
+            NTP_QUERY = bytearray(48)
+            NTP_QUERY[0] = 0x1B
+            addr = socket.getaddrinfo(NTP_HOST, 123)[0][-1]
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.settimeout(3)
+                res = s.sendto(NTP_QUERY, addr)
+                msg = s.recv(48)
+            finally:
+                s.close()
+            val = struct.unpack("!I", msg[40:44])[0]
+            t = val - NTP_DELTA
+            tm = time.gmtime(t)
+            print(f"Current UTC time: {tm}")
+            self.rtc = machine.RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
+        except Exception as e:
+            print(f"Failed to set time from NTP from {e}, using default")
+
+    def is_open(self):
+        if not self.rtc:
+            now = machine.RTC().datetime()
+        else:
+            now = self.rtc.datetime()
+
+        hours = now[4]
+        is_open = False
+        if hours >= START_HOUR_UTC:
+            is_open = True
+            if START_HOUR_UTC < STOP_HOUR_UTC < hours:
+                is_open = False
+
+        if is_open and self.am_sleeping:
+            print("Waking up!")
+            self.am_sleeping = False
+        return is_open
+
+    def sleep(self):
+        if not self.am_sleeping:
+            self.am_sleeping = True
+            print("Going to sleep")
+        if DEEP_SLEEP_MODE_ENABLED:
+            machine.deepsleep(self.SLEEP_TIME * 1000)
+        else:
+            time.sleep(self.SLEEP_TIME)
+
 def run_ledrunners():
     plm = PlasmaLedManager(NUM_LEDS)
     ledrunners = [LedRunner(plm), LedRunner(plm, reverse=True)]
-    global go
+    global first_run
 
     while True:
-        # Update the LEDs
-        plm.loop()
+        if oh.is_open():
+            # Update the LEDs
+            plm.loop()
 
-        for ledrunner in ledrunners:
-            ledrunner.step()
-            if ledrunner.done:
-                ledrunners.remove(ledrunner)
+            for ledrunner in ledrunners:
+                ledrunner.step()
+                if ledrunner.done:
+                    ledrunners.remove(ledrunner)
 
-        # Small chance to add a new runner
-        chance = randint(0, RUNNER_CHANCE)
-        if go or chance == 0:
-            reverse = REVERSIBLE and randint(0, 1) == 0
-            ledrunners.append(LedRunner(plm, reverse))
-            go = False
+            # Small chance to add a new runner
+            chance = randint(0, RUNNER_CHANCE)
+            if first_run or chance == 0:
+                reverse = REVERSIBLE and randint(0, 1) == 0
+                ledrunners.append(LedRunner(plm, reverse))
+                first_run = False
 
-        # Wait for the next update
-        time.sleep(1.0 / UPDATES)
+            # Wait for the next update
+            time.sleep(1.0 / UPDATES)
+        else:
+            plm.black_out()
+            oh.sleep()
 
-
-go = True
+first_run = True
+oh = OpeningHours(START_HOUR_UTC, STOP_HOUR_UTC)
 ledrunners_thread = _thread.start_new_thread(run_ledrunners, ())
-http_server()
+
+# Networky stuff
+ip = connect_to_wifi()
+oh.set_time()
+http_server(ip)
