@@ -4,6 +4,9 @@ WIFI_PASSWORD = '<Credential for your wifi network>'
 # Set how many LEDs you have
 NUM_LEDS = 96
 
+# If you see weird yellow-magenta-ish colors and long runners, try setting this to True
+RGWB = False
+
 # The speed that the LEDs will start cycling at
 DEFAULT_SPEED = 10
 

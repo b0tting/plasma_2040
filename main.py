@@ -1,8 +1,12 @@
-import socket
-from random import random, randint, choice
+wlan_capable = True
+try:
+    import socket
+    import network
+except ImportError:
+    wlan_capable = False
 
+from random import random, randint, choice
 import plasma
-import network
 from plasma import plasma2040
 import machine
 import time
@@ -85,10 +89,10 @@ class PlasmaLedManager:
         "pink": (0.9, 1, DEFAULT_BRIGHTNESS),
     }
 
-    def __init__(self, led_count):
+    def __init__(self, led_count, rgbw=False):
         self.led_count = led_count
         self.leds = [[0, 0, 0] for _ in range(led_count)]
-        self.led_strip = plasma.WS2812(led_count, 0, 0, plasma2040.DAT, rgbw=False)
+        self.led_strip = plasma.WS2812(led_count, 0, 0, plasma2040.DAT, rgbw=rgbw)
         self.led_strip.start()
         self.mean = [0.07, 0.1, 0.0]
 
@@ -124,6 +128,7 @@ class PlasmaLedManager:
 
     def black_out(self):
         for led in self.leds:
+            led[1] = 0.0
             led[2] = 0.0
         self.loop()
 
@@ -156,7 +161,8 @@ class LedRunner:
 
 class OpeningHours:
     SLEEP_TIME = 1 * 60 # minutes * seconds
-    def __init__(self, open_from, open_until):
+    def __init__(self, open_from, open_until, wlan_capable=True):
+        self.wlan_capable = wlan_capable
         self.open_from = open_from
         self.open_until = open_until
         self.rtc = None
@@ -183,6 +189,8 @@ class OpeningHours:
             print(f"Failed to set time from NTP from {e}, using default")
 
     def is_open(self):
+        if not self.wlan_capable:
+            return True
         if not self.rtc:
             now = machine.RTC().datetime()
         else:
@@ -210,7 +218,7 @@ class OpeningHours:
             time.sleep(self.SLEEP_TIME)
 
 def run_ledrunners():
-    plm = PlasmaLedManager(NUM_LEDS)
+    plm = PlasmaLedManager(NUM_LEDS, RGWB)
     ledrunners = [LedRunner(plm), LedRunner(plm, reverse=True)]
     global first_run
 
@@ -238,10 +246,11 @@ def run_ledrunners():
             oh.sleep()
 
 first_run = True
-oh = OpeningHours(START_HOUR_UTC, STOP_HOUR_UTC)
+oh = OpeningHours(START_HOUR_UTC, STOP_HOUR_UTC, wlan_capable)
 ledrunners_thread = _thread.start_new_thread(run_ledrunners, ())
 
 # Networky stuff
-ip = connect_to_wifi()
-oh.set_time()
-http_server(ip)
+if wlan_capable:
+    ip = connect_to_wifi()
+    oh.set_time()
+    http_server(ip)
